@@ -1,0 +1,178 @@
+---
+title: "RobustFlow Analysis Report"
+date: "`r format(params$run_date, '%B %d, %Y at %H:%M')`"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    number_sections: true
+params:
+  validated: NULL
+  paths_obj: NULL
+  drift_obj: NULL
+  gap_obj:   NULL
+  bai_obj:   NULL
+  tfi_obj:   NULL
+  run_date:  NULL
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(ggplot2)
+library(knitr)
+```
+
+---
+
+# Data Summary
+
+```{r data-summary}
+v <- params$validated
+knitr::kable(data.frame(
+  Metric = c("Individuals", "Time Points", "Balanced Panel",
+             "Total Observations"),
+  Value  = c(v$n_ids, v$n_times,
+             ifelse(v$balanced, "Yes", "No"),
+             nrow(v$data))
+), col.names = c("Metric", "Value"))
+```
+
+## Missingness
+
+```{r missingness}
+ms <- data.frame(
+  Variable    = names(v$missingness),
+  N_Missing   = as.integer(v$missingness),
+  Pct_Missing = round(v$missingness / nrow(v$data) * 100, 1)
+)
+knitr::kable(ms, row.names = FALSE)
+```
+
+---
+
+# Decision Paths
+
+## Top Paths
+
+```{r path-table}
+knitr::kable(head(params$paths_obj$path_counts, 20), row.names = FALSE,
+             col.names = c("Path", "N", "Pct (%)"))
+```
+
+**Path entropy:** `r round(params$paths_obj$path_entropy, 3)` bits
+
+## Aggregate Transition Matrix
+
+```{r trans-matrix}
+mat <- params$paths_obj$transition_matrix
+if (nrow(mat) > 0) knitr::kable(as.data.frame(mat))
+```
+
+---
+
+# Drift Intensity Index (DII)
+
+The DII measures structural instability in the decision transition system
+between consecutive time periods using the Frobenius norm.
+
+```{r dii-plot, fig.width=7, fig.height=4}
+df <- params$drift_obj$summary
+ggplot(df, aes(x = time, y = DII, group = 1)) +
+  geom_line(color = "#1a9641", linewidth = 1) +
+  geom_point(size = 2) +
+  labs(x = "Time", y = "DII",
+       title = "Drift Intensity Index Over Time",
+       caption = "Higher DII = greater structural instability.") +
+  theme_minimal()
+```
+
+```{r dii-table}
+knitr::kable(params$drift_obj$summary, row.names = FALSE,
+             col.names = c("Time", "DII"))
+```
+
+**Mean DII:** `r round(params$drift_obj$mean_dii, 4)`
+**Period of maximum drift:** `r params$drift_obj$max_dii_period`
+
+---
+
+# Disparities
+
+```{r disparities-check, results='asis'}
+if (is.null(params$gap_obj)) {
+  cat("*No group variable was selected. Disparity analysis not performed.*\n")
+}
+```
+
+```{r disparities, eval=!is.null(params$gap_obj), fig.width=7, fig.height=4}
+df  <- params$gap_obj$long_format
+gap <- params$gap_obj$gap_df
+
+ggplot(df, aes(x = time, y = rate, color = group, group = group)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(x = "Time", y = "Rate", color = "Group",
+       title = "Group-Specific Trajectories") +
+  theme_minimal()
+```
+
+```{r gap-plot, eval=!is.null(params$gap_obj), fig.width=7, fig.height=4}
+ggplot(gap, aes(x = time, y = gap, group = 1)) +
+  geom_line(color = "#762a83", linewidth = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_point(size = 2) +
+  labs(x = "Time", y = "Gap (Group 1 \u2212 Group 2)",
+       title = "Disparity Gap Over Time") +
+  theme_minimal()
+```
+
+```{r bai-table, eval=!is.null(params$bai_obj), results='asis'}
+b <- params$bai_obj
+cat(paste0(
+  "**Bias Amplification Index (BAI):** ", b$bai, "  \n",
+  "**Direction:** ", b$direction, "  \n",
+  "**Gap at t=1:** ", b$gap_start, " | ",
+  "**Gap at t=T:** ", b$gap_end, "\n"
+))
+```
+
+---
+
+# Robustness (TFI)
+
+The Temporal Fragility Index (TFI) estimates the minimum hidden-bias
+perturbation required to nullify the observed longitudinal trend.
+
+```{r tfi-table}
+knitr::kable(params$tfi_obj$summary_table, row.names = FALSE,
+             col.names = c("Metric", "Value"))
+```
+
+```{r tfi-plot, fig.width=7, fig.height=4}
+sc <- params$tfi_obj$sensitivity_curve
+ggplot(sc, aes(x = perturbation, y = adjusted_effect)) +
+  geom_line(color = "#4575b4", linewidth = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#d73027") +
+  labs(x = "Hidden Bias Parameter (u)",
+       y = "Adjusted Effect",
+       title = "TFI Sensitivity Curve",
+       caption = "Red dashed line = null effect threshold.") +
+  theme_minimal()
+```
+
+---
+
+# Session Information
+
+```{r session}
+si <- sessionInfo()
+cat(paste0(
+  "R version: ", si$R.version$version.string, "\n",
+  "RobustFlow version: ",
+  tryCatch(as.character(packageVersion("RobustFlow")), error = function(e) "unknown"),
+  "\n",
+  "Platform: ", si$platform
+))
+```

@@ -1,0 +1,354 @@
+---
+title: "Introduction to RobustFlow"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction to RobustFlow}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width  = 6.5,
+  fig.height = 4,
+  out.width  = "100%"
+)
+library(RobustFlow)
+library(ggplot2)
+```
+
+## Overview
+
+**RobustFlow** is an R package for auditing temporal drift, subgroup
+disparities, and robustness in longitudinal decision systems.
+
+It is built around three methodological contributions:
+
+| Metric | Definition | Key function |
+|--------|-----------|--------------|
+| **Drift Intensity Index (DII)** | Frobenius norm of consecutive transition matrix differences | `compute_drift()` |
+| **Bias Amplification Index (BAI)** | Change in disparity gap from first to last time point | `compute_bai()` |
+| **Temporal Fragility Index (TFI)** | Minimum hidden-bias perturbation to nullify a trend conclusion | `compute_tfi_simple()` |
+
+An interactive Shiny application (`run_app()`) provides a seven-tab
+workflow with point-and-click access to all analyses plus downloadable
+HTML reports, CSV bundles, and reproducible R scripts.
+
+---
+
+## Simulated dataset
+
+We construct a panel that mimics a study of mathematics risk status across
+five elementary school waves, with three SES groups.
+
+```{r make-data}
+set.seed(2024)
+n_children <- 200
+n_waves    <- 5
+
+# Simulate SES group with unequal sizes
+ses <- sample(
+  c("Low SES", "Mid SES", "High SES"),
+  size    = n_children,
+  replace = TRUE,
+  prob    = c(0.35, 0.40, 0.25)
+)
+
+# Risk probability increases over waves for Low SES,
+# decreases slightly for High SES
+risk_prob <- function(ses_grp, wave) {
+  base <- switch(ses_grp,
+    "Low SES"  = 0.55,
+    "Mid SES"  = 0.35,
+    "High SES" = 0.20
+  )
+  trend <- switch(ses_grp,
+    "Low SES"  =  0.04,
+    "Mid SES"  =  0.01,
+    "High SES" = -0.02
+  )
+  pmin(pmax(base + trend * (wave - 1), 0.02), 0.98)
+}
+
+rows <- lapply(seq_len(n_children), function(i) {
+  data.frame(
+    child_id  = i,
+    wave      = seq_len(n_waves),
+    ses_group = ses[i],
+    school_id = sample(seq_len(20), 1),
+    risk_math = rbinom(n_waves, 1,
+                       vapply(seq_len(n_waves),
+                              function(w) risk_prob(ses[i], w),
+                              numeric(1)))
+  )
+})
+ecls_demo <- do.call(rbind, rows)
+head(ecls_demo, 8)
+```
+
+---
+
+## Step 1: Validate panel data
+
+`validate_panel_data()` checks variable existence, sorts the data, and
+reports panel balance and missingness.
+
+```{r validate}
+validated <- validate_panel_data(
+  data     = ecls_demo,
+  id       = "child_id",
+  time     = "wave",
+  decision = "risk_math",
+  group    = "ses_group",
+  cluster  = "school_id"
+)
+
+cat(sprintf(
+  "Individuals: %d\nWaves:       %d\nBalanced:    %s\n",
+  validated$n_ids,
+  validated$n_times,
+  validated$balanced
+))
+```
+
+---
+
+## Step 2: Build decision paths
+
+`build_paths()` constructs each child's complete risk trajectory and
+returns aggregate path frequencies, the pooled transition matrix, and
+Shannon entropy.
+
+```{r paths}
+paths <- build_paths(
+  data     = validated$data,
+  id       = "child_id",
+  time     = "wave",
+  decision = "risk_math"
+)
+
+# Top 10 paths
+head(paths$path_counts, 10)
+```
+
+Shannon entropy measures trajectory diversity — higher values mean more
+heterogeneous individual histories.
+
+```{r entropy}
+cat(sprintf("Path entropy: %.3f bits\n", paths$path_entropy))
+```
+
+### Aggregate transition matrix
+
+```{r trans-mat}
+paths$transition_matrix
+```
+
+```{r path-plot, fig.cap="Top 10 most common five-wave risk trajectories."}
+df_paths <- head(paths$path_counts, 10)
+df_paths$path <- factor(df_paths$path, levels = rev(df_paths$path))
+
+ggplot(df_paths, aes(x = path, y = n)) +
+  geom_col(fill = "#2c7bb6") +
+  coord_flip() +
+  labs(x = "Path", y = "Count",
+       title = "Top 10 Decision Paths") +
+  theme_minimal()
+```
+
+---
+
+## Step 3: Drift Intensity Index (DII)
+
+`compute_drift()` estimates a period-specific transition matrix for each
+consecutive wave pair and computes the Frobenius norm of their difference:
+
+$$DII_t = \| P_t - P_{t-1} \|_F$$
+
+A larger DII signals greater structural instability between two periods.
+
+```{r dii}
+drift <- compute_drift(
+  data      = validated$data,
+  id        = "child_id",
+  time      = "wave",
+  decision  = "risk_math",
+  normalize = TRUE
+)
+
+drift$summary
+cat(sprintf("Mean DII:             %.4f\n", drift$mean_dii))
+cat(sprintf("Period of max drift:  wave %s\n", drift$max_dii_period))
+```
+
+```{r dii-plot, fig.cap="DII over time. Higher values indicate greater structural change in risk transitions."}
+ggplot(drift$summary, aes(x = time, y = DII)) +
+  geom_line(color = "#1a9641", linewidth = 1) +
+  geom_point(size = 2.5) +
+  labs(x = "Wave", y = "DII",
+       title = "Drift Intensity Index Over Time") +
+  theme_minimal()
+```
+
+---
+
+## Step 4: Group trajectories and Bias Amplification Index (BAI)
+
+`compute_group_gaps()` computes the at-risk rate for each SES group at
+each wave and the pairwise gap (alphabetically first group minus second).
+
+`compute_bai()` then summarizes whether that gap widens or narrows:
+
+$$BAI = Gap_T - Gap_1$$
+
+```{r gaps}
+gaps <- compute_group_gaps(
+  data        = validated$data,
+  time        = "wave",
+  decision    = "risk_math",
+  group       = "ses_group",
+  focal_value = 1
+)
+
+gaps$gap_df
+```
+
+```{r traj-plot, fig.cap="At-risk rates by SES group across five waves."}
+ggplot(gaps$long_format,
+       aes(x = time, y = rate, color = group, group = group)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2.5) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1),
+                     limits = c(0, 1)) +
+  labs(x = "Wave", y = "At-Risk Rate", color = "SES Group",
+       title = "Math Risk Trajectories by SES Group") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r gap-plot, fig.cap="Disparity gap (first two alphabetic SES groups) over time."}
+ggplot(gaps$gap_df, aes(x = time, y = gap)) +
+  geom_line(color = "#762a83", linewidth = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  geom_point(size = 2.5) +
+  labs(x = "Wave", y = "Gap",
+       title = "Disparity Gap Over Time") +
+  theme_minimal()
+```
+
+```{r bai}
+bai <- compute_bai(gaps$gap)
+cat(sprintf("BAI:       %.4f\n", bai$bai))
+cat(sprintf("Direction: %s\n",   bai$direction))
+cat(sprintf("Gap at t=1: %.4f  |  Gap at t=T: %.4f\n",
+            bai$gap_start, bai$gap_end))
+```
+
+The standardized version divides by the SD of the gap series:
+
+```{r bai-std}
+bai_std <- compute_bai(gaps$gap, standardize = TRUE)
+cat(sprintf("Standardized BAI: %.4f\n", bai_std$bai))
+```
+
+---
+
+## Step 5: Temporal Fragility Index (TFI)
+
+`compute_tfi_simple()` estimates how much hidden bias — modelled as a
+scalar attenuation $u$ — would be required to nullify the observed
+longitudinal trend in DII. The adjusted slope under perturbation $u$ is:
+
+$$\hat{\beta}(u) = \hat{\beta}_{obs} \times (1 - u)$$
+
+The TFI is the minimum $u$ at which the trend reverses or reaches zero.
+
+```{r tfi}
+dii_vals <- drift$summary$DII[!is.na(drift$summary$DII)]
+
+tfi <- compute_tfi_simple(dii_vals)
+tfi$summary_table
+```
+
+```{r tfi-plot, fig.cap="TFI sensitivity curve. The red dashed line marks the null effect threshold."}
+sc <- tfi$sensitivity_curve
+
+ggplot(sc, aes(x = perturbation, y = adjusted_effect)) +
+  geom_line(color = "#4575b4", linewidth = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#d73027",
+             linewidth = 0.8) +
+  labs(x = "Hidden Bias Parameter (u)",
+       y = "Adjusted Slope",
+       title = "TFI Sensitivity Curve") +
+  theme_minimal()
+```
+
+### Interpretation guide
+
+| TFI value | Interpretation |
+|-----------|---------------|
+| `Inf` | Conclusion cannot be nullified by scalar attenuation — highly robust |
+| `> 0.5` | Moderately robust |
+| `0.1 – 0.5` | Requires scrutiny — modest hidden bias could reverse conclusions |
+| `< 0.1` | Fragile — small bias sufficient to nullify the trend |
+
+---
+
+## Step 6: Exporting a reproducible R script
+
+```{r rscript, eval=FALSE}
+generate_r_script(
+  id_var       = "child_id",
+  time_var     = "wave",
+  decision_var = "risk_math",
+  group_var    = "ses_group",
+  cluster_var  = "school_id",
+  focal_value  = 1,
+  output_file  = "my_robustflow_analysis.R"
+)
+```
+
+The generated script is a self-contained `.R` file that a collaborator
+can run to reproduce the full analysis without the Shiny app.
+
+---
+
+## Step 7: Launch the interactive app
+
+```{r app, eval=FALSE}
+run_app()
+```
+
+The app loads in your default browser and provides:
+
+| Tab | Content |
+|-----|---------|
+| **Data** | Upload, variable mapping, balance diagnostics, missingness |
+| **Paths** | Path frequencies, transition matrix, entropy |
+| **Drift** | Prevalence over time, DII trend, period-specific matrices |
+| **Disparities** | Group trajectories, gap evolution, BAI |
+| **Robustness** | TFI, sensitivity curve |
+| **Intervention** | Highest-risk transitions, disparity-generating steps |
+| **Report** | HTML report, CSV bundle, reproducible R script |
+
+---
+
+## Citation
+
+If you use RobustFlow in published research, please cite:
+
+```
+Hait, S. (2025). RobustFlow: Robustness and drift auditing for
+longitudinal decision systems. R package version 0.1.0.
+https://github.com/subirhait/RobustFlow
+```
+
+---
+
+## Session info
+
+```{r session}
+sessionInfo()
+```

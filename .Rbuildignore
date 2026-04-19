@@ -1,0 +1,15 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^README\.Rmd$
+^cran-comments\.md$
+^SETUP_GUIDE\.md$
+^\.github$
+^dev$
+^\.git$
+^docs$
+^pkgdown\.yaml$
+^_pkgdown\.yaml$
+^LICENSE\.md$
+^dev$
+^\.github$
+
