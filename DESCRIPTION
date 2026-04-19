@@ -1,6 +1,6 @@
 Package: RobustFlow
 Title: Robustness and Drift Auditing for Longitudinal Decision Systems
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: person("Subir", "Hait",
     email = "haitsubi@msu.edu",
     role  = c("aut", "cre"),

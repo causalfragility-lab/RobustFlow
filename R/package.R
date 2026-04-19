@@ -24,7 +24,7 @@
 #' @references
 #' Hait, S. (2025). \emph{RobustFlow: Robustness and drift auditing for
 #' longitudinal decision systems}. R package version 0.1.0.
-#' \url{https://github.com/subirhait/RobustFlow}
+#' \url{https://github.com/causalfragility-lab/RobustFlow}
 #'
 #' @keywords internal
 "_PACKAGE"

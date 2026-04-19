@@ -1,3 +1,14 @@
+# RobustFlow 0.1.1
+
+## CRAN compliance fixes
+
+* Fixed invalid URL in `man/RobustFlow-package.Rd`
+  (updated to causalfragility-lab organisation).
+* Added `inst/WORDLIST` to register DII, BAI, TFI
+  as valid package-specific acronyms.
+
+---
+
 # RobustFlow 0.1.0
 
 ## Initial release
