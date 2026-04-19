@@ -1,7 +1,7 @@
 # RobustFlow <img src="man/figures/logo.png" align="right" height="139" alt="" />
 
 <!-- badges: start -->
-[![R-CMD-check](https://github.com/subirhait/RobustFlow/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/subirhait/RobustFlow/actions/workflows/R-CMD-check.yaml)
+[![R-CMD-check](https://github.com/causalfragility-lab/RobustFlow/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/causalfragility-lab/RobustFlow/actions/workflows/R-CMD-check.yaml)
 [![CRAN status](https://www.r-pkg.org/badges/version/RobustFlow)](https://CRAN.R-project.org/package=RobustFlow)
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
@@ -28,7 +28,7 @@ RobustFlow answers all three in a single, coherent workflow.
 
 ---
 
-## Signature metrics
+## Signature Metrics
 
 | Metric | Symbol | Definition |
 |--------|--------|-----------|
@@ -44,7 +44,7 @@ Install the development version from GitHub:
 
 ```r
 # install.packages("pak")
-pak::pak("subirhait/RobustFlow")
+pak::pak("causalfragility-lab/RobustFlow")
 ```
 
 Once on CRAN:
@@ -55,7 +55,7 @@ install.packages("RobustFlow")
 
 ---
 
-## Quick start
+## Quick Start
 
 ```r
 library(RobustFlow)
@@ -76,32 +76,32 @@ paths <- build_paths(
   time     = "wave",
   decision = "risk_math"
 )
-paths$path_counts       # frequency table
-paths$transition_matrix # pooled transition matrix
-paths$path_entropy      # Shannon entropy
+paths$path_counts        # frequency table
+paths$transition_matrix  # pooled transition matrix
+paths$path_entropy       # Shannon entropy
 
-# 3. Drift Intensity Index
+# 3. Drift Intensity Index (DII)
 drift <- compute_drift(validated$data, "child_id", "wave", "risk_math")
-drift$summary           # DII per wave
-drift$mean_dii          # mean DII across all periods
+drift$summary            # DII per wave
+drift$mean_dii           # mean DII across all periods
 
-# 4. Group gaps and BAI
+# 4. Group gaps and Bias Amplification Index (BAI)
 gaps <- compute_group_gaps(validated$data, "wave", "risk_math", "ses_group")
 bai  <- compute_bai(gaps$gap)
-bai$bai                 # e.g. 0.12
-bai$direction           # "amplification"
+bai$bai                  # e.g. 0.12
+bai$direction            # "amplification"
 
-# 5. TFI
+# 5. Temporal Fragility Index (TFI)
 tfi <- compute_tfi_simple(drift$summary$DII[!is.na(drift$summary$DII)])
-tfi$tfi                 # minimum attenuation to nullify trend
+tfi$tfi                  # minimum attenuation to nullify trend
 
-# 6. Interactive app
+# 6. Launch the interactive Shiny app
 run_app()
 ```
 
 ---
 
-## The Shiny application
+## The Shiny Application
 
 `run_app()` opens a browser-based interface with seven tabs:
 
@@ -117,7 +117,23 @@ run_app()
 
 ---
 
-## Example dataset
+## Function Reference
+
+| Function | Purpose |
+|----------|---------|
+| `validate_panel_data()` | Validate and prepare longitudinal panel data |
+| `build_paths()` | Construct individual decision paths and transition matrix |
+| `compute_transition_matrix_all()` | Pooled transition matrix across all individuals |
+| `compute_drift()` | Compute the Drift Intensity Index (DII) |
+| `compute_group_gaps()` | Group-specific trajectories and disparity gaps |
+| `compute_bai()` | Compute the Bias Amplification Index (BAI) |
+| `compute_tfi_simple()` | Compute the Temporal Fragility Index (TFI) |
+| `generate_r_script()` | Export a self-contained reproducible R script |
+| `run_app()` | Launch the interactive Shiny application |
+
+---
+
+## Example Dataset
 
 The package vignette demonstrates a simulated longitudinal study of
 mathematics risk status across five elementary school waves for 200
@@ -133,19 +149,28 @@ vignette("introduction", package = "RobustFlow")
 
 ## Citation
 
+If you use RobustFlow in published research, please cite:
+
 ```bibtex
-@Manual{RobustFlow2025,
+@Manual{RobustFlow2026,
   title  = {{RobustFlow}: Robustness and Drift Auditing for Longitudinal
             Decision Systems},
   author = {Subir Hait},
-  year   = {2025},
+  year   = {2026},
   note   = {R package version 0.1.0},
-  url    = {https://github.com/subirhait/RobustFlow}
+  url    = {https://github.com/causalfragility-lab/RobustFlow}
 }
 ```
 
 ---
 
+## Contributing
+
+Bug reports and feature requests are welcome at  
+<https://github.com/causalfragility-lab/RobustFlow/issues>
+
+---
+
 ## License
 
-GPL (>= 3) — see [LICENSE](LICENSE) for details.
+GPL (>= 3)
