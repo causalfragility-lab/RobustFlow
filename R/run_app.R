@@ -19,7 +19,7 @@
 #' @export
 #'
 #' @examples
-#' \dontrun{
+#' if (interactive()) {
 #'   run_app()
 #' }
 run_app <- function(onStart         = NULL,
