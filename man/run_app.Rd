@@ -36,7 +36,7 @@ auditing robustness, identifying intervention points, and exporting
 reproducible reports.
 }
 \examples{
-\dontrun{
+if (interactive()) {
   run_app()
 }
 }

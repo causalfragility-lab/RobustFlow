@@ -2,18 +2,27 @@
 
 ## Resubmission notes
 
-This is a resubmission addressing reviewer feedback from Benjamin Altmann (2026-04-21).
+This is a resubmission addressing reviewer feedback from Benjamin Altmann
+(2026-04-21) and Uwe Ligges (2026-04-22).
 
 ### Changes made in response to reviewer comments
 
 1. **References added to DESCRIPTION**: Added three citations to the `Description`
-   field covering the Frobenius norm (Golub & Van Loan, 2013), hidden-bias
-   sensitivity analysis (Rosenbaum, 2002), and disparity trajectory methods
-   (Duncan & Magnuson, 2011), in the format required by CRAN policy.
+   field covering the Frobenius norm (Golub & Van Loan, 2013, ISBN:9781421407944),
+   hidden-bias sensitivity analysis (Rosenbaum, 2002, ISBN:9781441912633), and
+   disparity trajectory methods (Duncan & Murnane, 2011, ISBN:9780871542731),
+   in the format required by CRAN policy.
 
 2. **`\dontrun{}` replaced with `if (interactive()) {}`**: The `run_app()`
    example in `run_app.R` now uses `if (interactive()) {}` to signal that
    the function is intended for interactive use only.
+
+3. **Invalid DOI removed from DESCRIPTION** (per Uwe Ligges): The reference
+   `Duncan & Magnuson (2011) <doi:10.1177/0002716210393335>` returned a 404
+   and has been replaced with the correct bibliographic entry for the
+   published edited volume: Duncan & Murnane (2011, ISBN:9780871542731),
+   *Whither Opportunity? Rising Inequality, Schools, and Children's Life
+   Chances*, Russell Sage Foundation. No DOI is used for this reference.
 
 ---
 
@@ -27,7 +36,16 @@ This is a resubmission addressing reviewer feedback from Benjamin Altmann (2026-
 - win-builder: R-release (via `devtools::check_win_release()`)
 
 ## R CMD check results
-0 errors | 0 warnings | 0 notes
+0 errors | 0 warnings | 1 note
+### Note explanation
+checking for future file timestamps ... NOTE
+unable to verify current time
+This is a transient network/system issue on the local Windows machine and is
+unrelated to the package itself. It does not appear on win-builder, GitHub
+Actions, or any other CI environment and will not reproduce on CRAN infrastructure.
+
+---
+
 ## Downstream dependencies
 
 There are currently no downstream packages that depend on RobustFlow.
